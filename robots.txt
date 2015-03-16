@@ -1,0 +1,8 @@
+User-agent: *
+Disallow: /css
+Disallow: /js
+Disallow: /img
+Disallow: /readings_repo
+Disallow: /lektire/datoteka
+Disallow: /informacije/uvjetikoristenja
+Sitemap: http://www.moje-lektire.com/sitemap.xml

@@ -1,0 +1,3 @@
+codeigniter -> Commong.php
+	- funkcija show_error, linija 235
+		- dodan je $title parametar

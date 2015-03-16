@@ -1,0 +1,259 @@
+<?php
+
+require_once(LIBPATH . SYSPATH . "htmlComponents/linkproxy/ILinkProxy.php");
+
+class Webcafe extends ZT_Controller implements ILinkProxy {
+
+	const PER_PAGE = 10;
+
+	public function __construct() {
+		parent::__construct();
+		
+		$this->load->model("webcafe/rss_channel_categories_model", "rssChannelCategoriesModel");
+		$this->load->model("webcafe/rss_channels_model", "rssChannelsModel");
+		$this->load->model("webcafe/rss_channel_items_model", "rssChannelItemsModel");
+
+		$this->load->helper('text');
+	}
+	
+
+	/**
+	 * Prikaz svih pisaca
+	 *
+	 */
+	public function Index() {
+		$this->head_generator->SetHeadTitle("Web Café - zanimljivosti, vijesti, lifestyle, showbiz");
+		$this->head_generator->SetHeadDescription("Vijesti, zanimljivosti, lifestyle, showbiz i druge razne teme.");
+		$this->head_generator->AddHeadKeywords("vijesti, zanimljivosti, lifestyle, showtime, showbiz, trač, zabava, tehnologija");
+		
+		$mainTemplateData['downHeader'] = $this->load->view(PathManager::GetPackagePath("lektire", "m_search_form_view"), null, true);
+
+		$contentTop = "";
+		$contentTop .= $this->load->view('ads/adsense_leaderboard_view.php', null, true);
+		$navigationData["ztRssChannelCategories"] = $this->rssChannelCategoriesModel->GetRssChannelCategories();
+		$navigationData["activeId"] = 0;
+		$contentTop .= $this->load->view(PathManager::GetPackagePath("webcafe", "c_navigation_view"),$navigationData, true);
+
+		//$notificationData['notificationTitle'] = "Pošaljite nam vaše lektire";
+		//$notificationData['notificationText'] = 'Ukoliko imate kvalitetnu i dobru lektiru podijelite to sa drugima. Pomozite nam da povećamo zbirku lektira i tako pomognemo novim generacijama. Pošaljite lektiru na ovome <a href="' . base_url() . 'lektire/upload" title="Pošaljite lektiru">linku</a>.';
+		//$contentTop .= $this->load->view('notification_message_view', $notificationData, true);
+
+		$mainTemplateData['contentTop'] = $contentTop;
+		
+		$templateData["contentLeft"] = "";
+		$templateData["contentCenter"] = "";
+		$templateData["contentRight"] = "";
+		
+		$ztRssChannelCategories = $this->rssChannelCategoriesModel->GetRssChannelCategories();
+		for($i = 0; $i < sizeof($ztRssChannelCategories); $i++){
+			$ztRssChannelCategory = $ztRssChannelCategories[$i];
+			$feedsBoxData["ztRssChannelCategory"] = $ztRssChannelCategory;
+			$feedsBoxData["ztRssChannelItems"] = $this->rssChannelItemsModel->GetRssChannelItemsByCategory($ztRssChannelCategory->GetId(), 5, 0);
+			
+			if($i%3 == 0){
+				if($i == 3){
+					srand(time());
+					$randval = rand(0, 1);
+					$templateData['contentLeft'] .=  $randval < 0.5 ? '<a href="http://www.otkrij-igre.net/" title="Otkrij besplatne online igre" target="_blank"><img src="'. static_url("img/ads/igre_otkrij_net_300x250.jpg") . '" /></a>' : '<a href="http://www.tv-tube.net/" title="TvTube - Watch free online TV" target="_blank"><img alt="TvTube - Watch free online TV" src="'. static_url("img/ads/tvtube_banner_300x250.jpg") . '" /></a>' ;
+				}
+				$templateData["contentLeft"] .= $this->load->view(PathManager::GetPackagePath("webcafe", "m_feeds_box_view"), $feedsBoxData, true);
+			} else if($i%3 == 1){
+				if($i == 1){
+					$templateData["contentCenter"] .= $this->load->view('ads/adsense_medium_rectangle_view', null, true);
+				}
+				
+				$templateData["contentCenter"] .= $this->load->view(PathManager::GetPackagePath("webcafe", "m_feeds_box_view"), $feedsBoxData, true);
+			} else {
+				if($i == 5){
+					$templateData["contentRight"] .= $this->load->view('ads/adsense_medium_rectangle_view', null, true);
+				}
+				$templateData["contentRight"] .= $this->load->view(PathManager::GetPackagePath("webcafe", "m_feeds_box_view"), $feedsBoxData, true);
+			}
+				
+		}
+		
+		
+		
+		
+		$mainTemplateData["template"] = $this->load->view(PathManager::GetSharedPath("template_444_view"), $templateData, true);
+
+		$this->Render($mainTemplateData);
+
+		//$this->FetchNetRssChannelItems();
+
+	}
+
+	/**
+	 * Predstavlja stranicu za zadanu kategoriju rss kanala
+	 *
+	 * @param int $rssChannelCategoryId - identifikator grupe rss kanala
+	 */
+	public function Kategorija($rssChannelCategoryId = 0){
+		if(!is_numeric($rssChannelCategoryId) && $rssChannelCategoryId == 0){
+			show_404();
+		}
+		
+		$ztRssChannelCategory = $this->rssChannelCategoriesModel->GetRssChannelCategory($rssChannelCategoryId);
+		
+		if(empty($ztRssChannelCategory)){
+			show_404();
+		}
+		
+		$this->FetchNetRssChannelItems($rssChannelCategoryId);
+		
+		$pageNumber = $this->uri->segment(6);
+		$this->head_generator->SetHeadTitle(empty($pageNumber) ? "Web Café - " . $ztRssChannelCategory->GetName() : "Web Café - " . $ztRssChannelCategory->GetName() . " - stranica " . $pageNumber);
+		$this->head_generator->SetHeadDescription(strip_tags($ztRssChannelCategory->GetDescription()));
+		$this->head_generator->AddHeadKeyword($ztRssChannelCategory->GetName());
+		
+		$mainTemplateData['downHeader'] = $this->load->view(PathManager::GetPackagePath("lektire", "m_search_form_view"), null, true);
+	
+		$contentTop = "";
+		$contentTop .= $this->load->view('ads/adsense_leaderboard_view.php', null, true);
+		$navigationData["ztRssChannelCategories"] = $this->rssChannelCategoriesModel->GetRssChannelCategories();
+		$navigationData["activeId"] = $rssChannelCategoryId;
+		$contentTop .= $this->load->view(PathManager::GetPackagePath("webcafe", "c_navigation_view"),$navigationData, true);
+		$mainTemplateData['contentTop'] = $contentTop;
+		
+		
+				
+		// ###### PAGINACIJA - BEGIN ######
+
+		$this->load->library('pagination');
+
+		$config['base_url'] = site_url("webcafe/kategorija/" . $rssChannelCategoryId . "/" .  hr_url_title($ztRssChannelCategory->GetName()));
+		$config['page_path'] = "stranica";
+		$config['total_rows'] = $this->rssChannelItemsModel->CountRssChannelItems($rssChannelCategoryId);
+		$config['per_page'] = self::PER_PAGE;
+		$config['uri_segment'] = 6;
+
+		$this->pagination->Initialize($config);
+
+		$ztRssItemsData["ztRssChannelItems"] = $this->rssChannelItemsModel->GetRssChannelItemsByCategory($rssChannelCategoryId, self::PER_PAGE, $this->pagination->GetOffset());
+		$ztRssItemsData['pagination'] = $this->pagination->create_links();
+
+		// ###### PAGINACIJA - END ######
+
+		$mainColumnData['mainTitle'] = $ztRssChannelCategory->GetName();
+		$mainColumnData['mainContent'] = "";
+		$mainColumnData['mainContent'] .= $this->load->view('ads/adsense_medium_rectangle_view', null, true);
+		$mainColumnData['mainContent'] .= $this->load->view('ads/adsense_medium_rectangle_view', null, true);
+		$mainColumnData['mainContent'] .= $this->load->view(PathManager::GetPackagePath("webcafe", "c_feed_list_view"), $ztRssItemsData, true);
+
+		$templateData['contentLeft'] = $this->load->view(PathManager::GetSharedPath("main_column_view"), $mainColumnData, true);
+
+
+		$templateData['contentRight'] = "";
+	
+		srand(time());
+		$randval = rand(0, 1);
+		$templateData['contentRight'] .=  $randval < 0.5 ? '<a href="http://www.otkrij-igre.net/" title="Otkrij besplatne online igre" target="_blank"><img src="'. static_url("img/ads/igre_otkrij_net_300x250.jpg") . '" /></a>' : '<a href="http://www.tv-tube.net/" title="TvTube - Watch free online TV" target="_blank"><img alt="TvTube - Watch free online TV" src="'. static_url("img/ads/tvtube_banner_300x250.jpg") . '" /></a>';
+		
+		$ztRssChannelCategory = $this->rssChannelCategoriesModel->GetRandomRssChannelCategory();
+		$feedsBoxData["ztRssChannelCategory"] = $ztRssChannelCategory;
+		$feedsBoxData["ztRssChannelItems"] = $this->rssChannelItemsModel->GetRssChannelItemsByCategory($ztRssChannelCategory->GetId(), 10, 0);
+		$templateData['contentRight'] .= $this->load->view(PathManager::GetPackagePath("webcafe", "m_feeds_box_view"), $feedsBoxData, true);
+		
+		$mainTemplateData["template"] = $this->load->view(PathManager::GetSharedPath("template_84_view"), $templateData, true);
+		
+		$mainTemplateData['contentBottom'] = null;		
+
+		$this->Render($mainTemplateData);
+
+	}
+
+	/**
+	 * Metoda koja za zadanu skupinu kanala skida nove rss sadrzaje ovisno o poslijednjem preuzimanju sadrzaja
+	 * i vremenu generiranja novog sadrzaja.
+	 * @param $ztRssChannelCategoryId - identifikator kategorije rss kanala
+	 */
+	public function FetchNetRssChannelItems($ztRssChannelCategoryId = 0){
+		$this->load->library("webcafe/zt_rss_reader");
+		
+		if($ztRssChannelCategoryId == 0){
+			$ztRssChannels = $this->rssChannelsModel->GetRssChannels();	
+		} else {
+			$ztRssChannels = $this->rssChannelsModel->GetRssChannelsByCategory($ztRssChannelCategoryId);	
+		}
+		
+		
+		foreach($ztRssChannels as $ztRssChannel){
+			$time = time();
+			$ttlInSecounds = $ztRssChannel->GetTtl() * 60;
+			//echo "TIME: "  . $time . ", LATEST DOWNLOAD: " . $ztRssChannel->GetLatestDownload() . ", razlika: " . ($time - $ztRssChannel->GetLatestDownload()) . ", TTL " . $ttlInSecounds . "<br />";
+			if($time - $ztRssChannel->GetLatestDownload() > $ttlInSecounds){
+				$this->zt_rss_reader->ReadToDb($ztRssChannel);	
+			}
+		}
+	}
+
+
+	
+	
+	public function Clanak($ztRssChannelItemId = 0){
+		if(empty($ztRssChannelItemId)){
+			show_404();
+		}
+		
+		$ztRssChannelItem = $this->rssChannelItemsModel->GetRssChannelItem($ztRssChannelItemId);
+		
+		if(empty($ztRssChannelItem)){
+			show_404();
+		}
+		
+		$this->head_generator->SetHeadTitle("Članak - " . $ztRssChannelItem->GetTitle());
+		$this->head_generator->SetHeadDescription(strip_tags($ztRssChannelItem->GetDescription()));
+		//$this->head->GetHeadModel()->SetKeywords(array());
+		
+		$params = array(
+			"url" => $ztRssChannelItem->GetLink(),
+			"controllerName" => "webcafe",
+			"head" => $this->head_generator->Render(), 
+			"genericId" => $ztRssChannelItem->GetId(),
+			"noFrames" => strip_tags($ztRssChannelItem->GetDescription()),
+			"headerRows" => 105
+		);
+		
+		$this->load->library(PathManager::GetSystemPath("htmlComponents/linkproxy/link_proxy"), $params);
+		
+		echo $this->link_proxy->Render();
+	}
+	
+	/**
+	 * Generiranje stranice za header poveznice
+	 * @param int $id - identifikator knjige
+	 * @return unknown_type
+	 */
+	public function Header($id = 0){
+		if($id > 0){
+			$ztRssChannelItem = $this->rssChannelItemsModel->GetRssChannelItem($id);
+			
+			if(empty($ztRssChannelItem)){
+				show_404();
+			}
+		
+			$this->head_generator->SetHeadTitle("Članak - " . $ztRssChannelItem->GetTitle());
+			$this->head_generator->SetHeadDescription(strip_tags($ztRssChannelItem->GetDescription()));
+			
+			$headerData['head'] = $this->head_generator->Render();
+			
+			$headerData["links"] = array(
+				"Web Café" => site_url("webcafe"),
+				"Moje lektire" => base_url(),
+				"Otkrij igre" => "www.otkrij-igre.net"
+			);
+			
+		} else {
+			show_404();			
+		}
+		
+		
+		$headerData['ad'] = $this->load->view('ads/adsense_proxy_leaderboard_view.php', null, true);
+		
+		$this->load->view(PathManager::GetSharedPath("linkproxy/header"), $headerData);
+	}
+	
+	
+}
+
+?>
